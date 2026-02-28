@@ -122,10 +122,13 @@ async def chat(request: Request):
     if not message:
         return JSONResponse({"error": "message is required"}, status_code=400)
 
-    if not conv_id:
+    is_new = not conv_id
+    if is_new:
         conv_id = str(uuid.uuid4())
         preview = message[:30] + "..." if len(message) > 30 else message
         db.create_conversation(conv_id, preview)
+
+    cli_session_id = None if is_new else db.get_cli_session_id(conv_id)
 
     db.add_message(conv_id, "user", message)
 
@@ -134,7 +137,7 @@ async def chat(request: Request):
 
         accumulated = ""
         try:
-            async for event in run_agent(message):
+            async for event in run_agent(message, cli_session_id=cli_session_id):
                 if await request.is_disconnected():
                     break
 
@@ -149,6 +152,9 @@ async def chat(request: Request):
 
                 elif etype == "init":
                     yield _sse({"type": "init", "model": event.get("model", "")})
+
+                elif etype == "session":
+                    db.set_cli_session_id(conv_id, event["session_id"])
 
                 elif etype == "done":
                     if accumulated:

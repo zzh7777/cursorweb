@@ -66,14 +66,23 @@ def _readline_with_timeout(stdout):
     return stdout.readline()
 
 
-async def run_agent(prompt: str, *, workspace: str | None = None) -> AsyncGenerator[dict, None]:
+async def run_agent(
+    prompt: str,
+    *,
+    workspace: str | None = None,
+    cli_session_id: str | None = None,
+) -> AsyncGenerator[dict, None]:
     """
     Spawn Cursor Agent CLI in headless print mode.
     Uses subprocess.Popen + dedicated thread pool to avoid blocking the server.
-    Yields parsed event dicts: {type: "text"/"tool"/"init"/"done"/"error", ...}
+    When cli_session_id is provided, uses --resume to maintain conversation context.
+    Yields parsed event dicts: {type: "text"/"tool"/"init"/"done"/"error"/"session", ...}
     """
     cli_args = ["-p", "--output-format", "stream-json", "--stream-partial-output", "--trust",
                 "--model", MODEL]
+
+    if cli_session_id:
+        cli_args.extend(["--resume", cli_session_id])
 
     if workspace:
         cli_args.extend(["--workspace", workspace])
@@ -164,6 +173,9 @@ async def run_agent(prompt: str, *, workspace: str | None = None) -> AsyncGenera
 
             elif evt_type == "result":
                 finished = True
+                session_id = event.get("session_id")
+                if session_id:
+                    yield {"type": "session", "session_id": session_id}
                 yield {"type": "done", "content": accumulated}
                 _write_log(log_file, raw_lines, prompt)
                 return

@@ -19,6 +19,7 @@ def _init_db():
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL DEFAULT 'New Chat',
+                cli_session_id TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -31,6 +32,10 @@ def _init_db():
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             );
         """)
+        try:
+            conn.execute("ALTER TABLE conversations ADD COLUMN cli_session_id TEXT")
+        except Exception:
+            pass
 
 _init_db()
 
@@ -66,6 +71,24 @@ def update_conversation_title(id: str, title: str):
             "UPDATE conversations SET title = ?, updated_at = datetime('now') WHERE id = ?",
             (title, id),
         )
+
+
+def set_cli_session_id(id: str, cli_session_id: str):
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE conversations SET cli_session_id = ? WHERE id = ?",
+            (cli_session_id, id),
+        )
+
+
+def get_cli_session_id(id: str) -> str | None:
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT cli_session_id FROM conversations WHERE id = ?", (id,)
+        ).fetchone()
+    if row:
+        return row["cli_session_id"]
+    return None
 
 
 def delete_conversation(id: str):
