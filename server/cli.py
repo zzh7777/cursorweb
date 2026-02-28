@@ -1,10 +1,17 @@
 import asyncio
 import json
+import logging
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
+
+LOG_DIR = Path(__file__).resolve().parent.parent / "data" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logger = logging.getLogger("cli")
 
 
 def resolve_agent_binary() -> tuple[str, str] | None:
@@ -82,13 +89,19 @@ async def run_agent(prompt: str, *, workspace: str | None = None) -> AsyncGenera
             env=env,
         )
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = LOG_DIR / f"{timestamp}_{proc.pid}.jsonl"
+
     accumulated = ""
     finished = False
+    raw_lines: list[str] = []
 
     async for raw_line in proc.stdout:
         line = raw_line.decode("utf-8", errors="replace").strip()
         if not line:
             continue
+
+        raw_lines.append(line)
 
         try:
             event = json.loads(line)
@@ -119,15 +132,36 @@ async def run_agent(prompt: str, *, workspace: str | None = None) -> AsyncGenera
         elif evt_type == "result":
             finished = True
             yield {"type": "done", "content": accumulated}
+            _write_log(log_file, raw_lines, prompt)
             return
 
         elif evt_type == "system" and subtype == "init":
             yield {"type": "init", "model": event.get("model", "")}
 
+    stderr_out = ""
+    if proc.stderr:
+        stderr_bytes = await proc.stderr.read()
+        stderr_out = stderr_bytes.decode("utf-8", errors="replace").strip()
+        if stderr_out:
+            raw_lines.append(f"[STDERR] {stderr_out}")
+
     await proc.wait()
+    _write_log(log_file, raw_lines, prompt)
 
     if not finished:
         if proc.returncode and proc.returncode != 0 and not accumulated:
             yield {"type": "error", "message": f"agent exited with code {proc.returncode}"}
         else:
             yield {"type": "done", "content": accumulated}
+
+
+def _write_log(log_file: Path, raw_lines: list[str], prompt: str):
+    try:
+        with open(log_file, "w", encoding="utf-8") as f:
+            f.write(f"# Prompt: {prompt[:200]}\n")
+            f.write(f"# Time: {datetime.now().isoformat()}\n")
+            f.write(f"# Lines: {len(raw_lines)}\n\n")
+            for line in raw_lines:
+                f.write(line + "\n")
+    except Exception as e:
+        logger.warning("Failed to write CLI log: %s", e)

@@ -55,8 +55,8 @@
 | fixmedins_name | varchar | 机构名称 | 0% | |
 | hosp_lv | integer | 医院等级 | 0% | 1=三级, 2=二级, 3=一级, **11=药店**（**integer，无前导零**） |
 | med_type | integer | 医疗类别 | 0% | 同 mdtrt_d 字典，但为 **integer** 类型 |
-| begndate | varchar | 开始日期 | 0% | YYYY-MM-DD |
-| enddate | varchar | 结束日期 | 0% | YYYY-MM-DD |
+| begndate | datetime | 开始日期 | 0% | |
+| enddate | datetime | 结束日期 | 0% | |
 | setl_time | time | 结算时间 | 0% | 仅时间，无日期部分 |
 | setl_type | integer | 结算类型 | 0% | 1=中心报销, 2=联网结算, 3=医疗救助 |
 | clr_type | integer | 清算类型 | 0.15% | 11=门诊, 21=住院, 41=药店 |
@@ -86,7 +86,7 @@
 | fixmedins_code | varchar | 机构编号 | 0% | |
 | fixmedins_name | varchar | 机构名称 | 0% | |
 | med_type | varchar | 医疗类别 | 0% | **varchar** 类型 |
-| fee_ocur_time | varchar | 费用发生时间 | 0% | `YYYY-MM-DD HH:MM:SS`，varchar |
+| fee_ocur_time | datetime | 费用发生时间 | 0% | |
 | hilist_code | varchar | 医保目录编码 | 0% | 国家统一编码 |
 | hilist_name | varchar | 医保目录名称 | 0% | |
 | list_type | integer | 目录类别 | 0% | 101=西药, 102=饮片, 201=诊疗, 301=耗材 |

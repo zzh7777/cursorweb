@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cursor Web - Admin</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #e4e4e7; min-height: 100vh; }
+  .header { background: #18181b; border-bottom: 1px solid #27272a; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header a { color: #a78bfa; text-decoration: none; font-size: 14px; }
+  .tabs { display: flex; gap: 0; background: #18181b; border-bottom: 1px solid #27272a; padding: 0 24px; }
+  .tab { padding: 12px 20px; cursor: pointer; font-size: 14px; color: #71717a; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: #a1a1aa; }
+  .tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+  .content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .card-header { padding: 12px 16px; background: #1f1f23; border-bottom: 1px solid #27272a; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  .card-header:hover { background: #27272a; }
+  .card-header h3 { font-size: 14px; font-weight: 500; }
+  .card-header .meta { font-size: 12px; color: #71717a; }
+  .card-body { padding: 16px; display: none; }
+  .card-body.open { display: block; }
+  .msg { padding: 8px 12px; margin-bottom: 8px; border-radius: 6px; font-size: 13px; line-height: 1.6; }
+  .msg.user { background: #3b0764; border: 1px solid #581c87; }
+  .msg.assistant { background: #1e293b; border: 1px solid #334155; }
+  .msg .role { font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; color: #a78bfa; }
+  .msg.user .role { color: #c084fc; }
+  .msg pre { white-space: pre-wrap; word-break: break-all; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; }
+  .log-content { background: #09090b; padding: 16px; border-radius: 6px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.8; white-space: pre-wrap; word-break: break-all; max-height: 600px; overflow-y: auto; }
+  .log-line { padding: 2px 0; }
+  .log-line:hover { background: #1e1e2e; }
+  .log-line .type-tag { display: inline-block; min-width: 80px; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-right: 8px; }
+  .type-system { background: #164e63; color: #67e8f9; }
+  .type-user { background: #581c87; color: #d8b4fe; }
+  .type-assistant { background: #1e3a5f; color: #93c5fd; }
+  .type-tool_call { background: #365314; color: #bef264; }
+  .type-result { background: #713f12; color: #fde047; }
+  .type-unknown { background: #27272a; color: #a1a1aa; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-count { background: #27272a; color: #a1a1aa; }
+  .badge-size { background: #1e3a5f; color: #93c5fd; }
+  .empty { text-align: center; padding: 60px 20px; color: #52525b; }
+  .refresh-btn { padding: 6px 14px; background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .refresh-btn:hover { background: #3f3f46; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Cursor Web Admin</h1>
+  <a href="/">← Back to Chat</a>
+  <div style="flex:1"></div>
+  <button class="refresh-btn" onclick="loadData()">Refresh</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="conversations" onclick="switchTab('conversations')">Conversations</div>
+  <div class="tab" data-tab="logs" onclick="switchTab('logs')">Raw CLI Logs</div>
+</div>
+
+<div class="content">
+  <div id="tab-conversations"></div>
+  <div id="tab-logs" class="hidden"></div>
+</div>
+
+<script>
+const API = '/api/debug';
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.getElementById('tab-conversations').classList.toggle('hidden', name !== 'conversations');
+  document.getElementById('tab-logs').classList.toggle('hidden', name !== 'logs');
+}
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  return ts.replace('T', ' ').slice(0, 19);
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function loadConversations() {
+  const container = document.getElementById('tab-conversations');
+  try {
+    const res = await fetch(`${API}/conversations`);
+    const convs = await res.json();
+    if (!convs.length) {
+      container.innerHTML = '<div class="empty">No conversations yet.</div>';
+      return;
+    }
+    container.innerHTML = convs.map((c, i) => `
+      <div class="card">
+        <div class="card-header" onclick="this.nextElementSibling.classList.toggle('open')">
+          <h3>${escapeHtml(c.title)}</h3>
+          <div class="meta">
+            <span class="badge badge-count">${c.message_count} msgs</span>
+            <span style="margin-left:8px">${formatTime(c.created_at)}</span>
+          </div>
+        </div>
+        <div class="card-body${i === 0 ? ' open' : ''}">
+          <div style="font-size:12px;color:#52525b;margin-bottom:12px;">ID: ${c.id}</div>
+          ${c.messages.map(m => `
+            <div class="msg ${m.role}">
+              <div class="role">${m.role}</div>
+              <pre>${escapeHtml(m.content)}</pre>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+async function loadLogs() {
+  const container = document.getElementById('tab-logs');
+  try {
+    const res = await fetch(`${API}/logs`);
+    const logs = await res.json();
+    if (!logs.length) {
+      container.innerHTML = '<div class="empty">No CLI logs yet. Send a message first.</div>';
+      return;
+    }
+    container.innerHTML = logs.map(log => `
+      <div class="card">
+        <div class="card-header" onclick="loadLogContent('${log.name}', this.nextElementSibling)">
+          <h3>${log.name}</h3>
+          <div class="meta">
+            <span class="badge badge-size">${formatBytes(log.size)}</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="log-content">Loading...</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+async function loadLogContent(filename, bodyEl) {
+  bodyEl.classList.toggle('open');
+  if (bodyEl.dataset.loaded) return;
+  bodyEl.dataset.loaded = '1';
+
+  try {
+    const res = await fetch(`${API}/logs/${filename}`);
+    const data = await res.json();
+    const lines = data.content.split('\n');
+    const formatted = lines.map(line => {
+      if (line.startsWith('#')) return `<div class="log-line" style="color:#52525b">${escapeHtml(line)}</div>`;
+      if (!line.trim()) return '';
+      try {
+        const obj = JSON.parse(line);
+        const typeClass = 'type-' + (obj.type || 'unknown');
+        return `<div class="log-line"><span class="type-tag ${typeClass}">${obj.type || '?'}${obj.subtype ? '.' + obj.subtype : ''}</span>${escapeHtml(line)}</div>`;
+      } catch {
+        return `<div class="log-line">${escapeHtml(line)}</div>`;
+      }
+    }).join('');
+    bodyEl.querySelector('.log-content').innerHTML = formatted;
+  } catch (e) {
+    bodyEl.querySelector('.log-content').textContent = 'Error: ' + e.message;
+  }
+}
+
+function loadData() {
+  loadConversations();
+  loadLogs();
+}
+
+loadData();
+</script>
+</body>
+</html>

@@ -4,14 +4,16 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server import db
-from server.cli import run_agent
+from server.cli import run_agent, LOG_DIR
 
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
+ADMIN_HTML = Path(__file__).resolve().parent / "admin.html"
 
 app = FastAPI()
 
@@ -66,6 +68,48 @@ def delete_conversation(conv_id: str):
 @app.get("/api/conversations/{conv_id}/messages")
 def list_messages(conv_id: str):
     return db.get_messages(conv_id)
+
+# ---------- Admin / Debug API ----------
+
+@app.get("/admin")
+async def admin_page():
+    if ADMIN_HTML.is_file():
+        return HTMLResponse(ADMIN_HTML.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>admin.html not found</h1>", status_code=404)
+
+
+@app.get("/api/debug/logs")
+def debug_list_logs():
+    if not LOG_DIR.is_dir():
+        return []
+    logs = sorted(LOG_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [
+        {
+            "name": f.name,
+            "size": f.stat().st_size,
+            "modified": f.stat().st_mtime,
+        }
+        for f in logs[:50]
+    ]
+
+
+@app.get("/api/debug/logs/{filename}")
+def debug_read_log(filename: str):
+    log_file = LOG_DIR / filename
+    if not log_file.is_file() or ".." in filename:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    content = log_file.read_text(encoding="utf-8")
+    return {"name": filename, "content": content}
+
+
+@app.get("/api/debug/conversations")
+def debug_all_conversations():
+    convs = db.get_conversations()
+    result = []
+    for c in convs:
+        msgs = db.get_messages(c["id"])
+        result.append({**c, "messages": msgs, "message_count": len(msgs)})
+    return result
 
 # ---------- Chat SSE endpoint ----------
 
@@ -140,11 +184,12 @@ def _sse(data: dict) -> str:
 # ---------- SPA static files + fallback ----------
 
 if DIST_DIR.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+    app.mount("/", StaticFiles(directory=str(DIST_DIR), html=True), name="spa")
 
-    @app.get("/{full_path:path}")
-    async def spa_fallback(full_path: str):
-        file = DIST_DIR / full_path
-        if file.is_file():
-            return FileResponse(str(file))
-        return FileResponse(str(DIST_DIR / "index.html"))
+    @app.exception_handler(StarletteHTTPException)
+    async def spa_fallback(request: Request, exc: StarletteHTTPException):
+        if exc.status_code == 404 and not request.url.path.startswith("/api/"):
+            index = DIST_DIR / "index.html"
+            if index.is_file():
+                return FileResponse(str(index))
+        return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
