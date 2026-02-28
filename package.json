@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": ".venv\\Scripts\\uvicorn server.app:app --reload --port 3001",
+    "dev:server": ".venv\\Scripts\\uvicorn server.app:app --reload --port 3002",
     "build": "vite build",
     "preview": "vite preview"
   },

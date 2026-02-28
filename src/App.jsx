@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
@@ -11,6 +11,11 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [streaming, setStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const activeIdRef = useRef(activeId);
+  const streamingConvIdRef = useRef(null);
+
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   const fetchConversations = useCallback(async () => {
     const res = await fetch(`${API}/conversations`);
@@ -27,6 +32,10 @@ export default function App() {
     const data = await res.json();
     setMessages(data);
     setActiveId(convId);
+
+    if (streamingConvIdRef.current === convId) {
+      setStreaming(true);
+    }
   }, []);
 
   const handleNewChat = () => {
@@ -53,6 +62,9 @@ export default function App() {
     const assistantMsg = { role: 'assistant', content: '', created_at: new Date().toISOString() };
     setMessages((prev) => [...prev, assistantMsg]);
 
+    let currentConvId = activeId;
+    streamingConvIdRef.current = currentConvId;
+
     try {
       const res = await fetch(`${API}/chat`, {
         method: 'POST',
@@ -66,7 +78,6 @@ export default function App() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let currentConvId = activeId;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -86,31 +97,41 @@ export default function App() {
 
             if (event.type === 'conversation') {
               currentConvId = event.id;
+              streamingConvIdRef.current = currentConvId;
               setActiveId(event.id);
+              activeIdRef.current = event.id;
+              fetchConversations();
             } else if (event.type === 'text') {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant') {
-                  updated[updated.length - 1] = { ...last, content: last.content + event.content };
-                }
-                return updated;
-              });
+              if (activeIdRef.current === currentConvId) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant') {
+                    updated[updated.length - 1] = { ...last, content: last.content + event.content };
+                  }
+                  return updated;
+                });
+              }
             } else if (event.type === 'done') {
               fetchConversations();
+              if (activeIdRef.current === currentConvId) {
+                setStreaming(false);
+              }
             } else if (event.type === 'error') {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant') {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    content: last.content || `Error: ${event.message}`,
-                    error: true,
-                  };
-                }
-                return updated;
-              });
+              if (activeIdRef.current === currentConvId) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant') {
+                    updated[updated.length - 1] = {
+                      ...last,
+                      content: last.content || `Error: ${event.message}`,
+                      error: true,
+                    };
+                  }
+                  return updated;
+                });
+              }
             }
           } catch {
             // skip malformed JSON
@@ -118,20 +139,25 @@ export default function App() {
         }
       }
     } catch (err) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last && last.role === 'assistant') {
-          updated[updated.length - 1] = {
-            ...last,
-            content: `Connection error: ${err.message}`,
-            error: true,
-          };
-        }
-        return updated;
-      });
+      if (activeIdRef.current === currentConvId) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === 'assistant') {
+            updated[updated.length - 1] = {
+              ...last,
+              content: `Connection error: ${err.message}`,
+              error: true,
+            };
+          }
+          return updated;
+        });
+      }
     } finally {
-      setStreaming(false);
+      streamingConvIdRef.current = null;
+      if (activeIdRef.current === currentConvId) {
+        setStreaming(false);
+      }
     }
   };
 
