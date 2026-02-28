@@ -43,7 +43,7 @@ export default function App() {
     fetchConversations();
   };
 
-  const handleSend = async (text, model) => {
+  const handleSend = async (text) => {
     if (streaming) return;
 
     const userMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
@@ -60,7 +60,6 @@ export default function App() {
         body: JSON.stringify({
           conversationId: activeId,
           message: text,
-          model: model || undefined,
         }),
       });
 
