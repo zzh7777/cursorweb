@@ -248,7 +248,7 @@ export default function MessageInput({ onSend, disabled, uploading }) {
         </div>
 
         <p className="text-center text-xs text-zinc-600 mt-2">
-          Powered by Cursor CLI &middot; 支持粘贴截图 (最多{MAX_IMAGE_COUNT}张, ≤10MB)
+          AIRC &middot; 支持粘贴截图 (最多{MAX_IMAGE_COUNT}张, ≤10MB)
         </p>
       </div>
     </div>

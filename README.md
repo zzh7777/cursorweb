@@ -1,28 +1,23 @@
-# Cursor Web Chat
+# AIRC - AI Rule Center
 
-通过 Web 界面调用 Cursor CLI（headless 模式）与 AI 对话，支持流式输出和对话历史。
+AI 驱动的医保智能监管规则中心。通过自然语言描述监管规则，AI 自动生成 SQL 查询，支持规则保存、管理和批量执行。
 
 ## 环境要求
 
 - **Node.js** >= 18
+- **Python** >= 3.10
 - **Cursor CLI** 已安装（[安装指南](https://cursor.com/docs/cli/installation)）
 - 已通过 `agent login` 登录，或设置 `CURSOR_API_KEY` 环境变量
-
-### 安装 Cursor CLI
-
-```powershell
-# Windows PowerShell
-irm 'https://cursor.com/install?win32=true' | iex
-
-# macOS / Linux / WSL
-curl https://cursor.com/install -fsS | bash
-```
 
 ## 快速开始
 
 ```bash
-# 安装依赖
+# 安装前端依赖
 npm install
+
+# 创建 Python 虚拟环境并安装后端依赖
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
 
 # 开发模式（前端 + 后端同时启动）
 npm run dev
@@ -30,45 +25,49 @@ npm run dev
 # 访问 http://localhost:5173
 ```
 
-## 生产部署
-
-```bash
-# 构建前端
-npm run build
-
-# 启动服务
-npm start
-
-# 访问 http://localhost:3001
-```
-
 ## 环境变量
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `PORT` | 后端服务端口 | 3001 |
-| `CURSOR_API_KEY` | Cursor API Key（可选，也可通过 `agent login` 认证） | - |
+在项目根目录创建 `.env` 文件配置 MySQL 连接（用于执行监管规则 SQL）：
+
+```env
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=medical_insurance
+```
 
 ## 项目结构
 
 ```
-cursorweb/
-├── server/            # Express 后端
-│   ├── index.js       # API 路由 + SSE 流式端点
-│   ├── cli.js         # Cursor CLI 封装
-│   └── db.js          # SQLite 数据持久化
-├── src/               # React 前端
-│   ├── App.jsx        # 主布局
-│   └── components/    # UI 组件
-├── vite.config.js     # Vite 配置
+airc/
+├── server/               # FastAPI 后端
+│   ├── app.py            # API 路由 + SSE 流式端点
+│   ├── cli.py            # Cursor CLI 封装
+│   ├── db.py             # SQLite 数据持久化（对话 + 规则）
+│   └── mysql_runner.py   # MySQL 只读查询执行器
+├── src/                  # React 前端
+│   ├── App.jsx           # 主布局
+│   └── components/
+│       ├── ChatWindow.jsx    # 对话窗口
+│       ├── MessageBubble.jsx # 消息气泡 + SQL 保存
+│       ├── MessageInput.jsx  # 输入框
+│       ├── Sidebar.jsx       # 侧边栏导航
+│       ├── RulesPanel.jsx    # 规则管理面板
+│       └── SettingsPanel.jsx # 设置面板
+├── .env                  # MySQL 连接配置
+├── requirements.txt      # Python 依赖
+├── vite.config.js        # Vite 配置
 └── package.json
 ```
 
 ## 功能
 
-- **流式对话** — 通过 SSE 实时显示 AI 回复
+- **AI 对话** — 描述监管规则，AI 生成对应 SQL 查询
+- **规则管理** — 保存、编辑、分类管理监管规则
+- **批量执行** — 一键运行所有启用的规则
+- **结果导出** — 查询结果支持 CSV 导出
+- **流式输出** — 通过 SSE 实时显示 AI 回复
 - **对话历史** — 自动保存，侧边栏浏览历史对话
-- **模型选择** — 支持切换不同 AI 模型
-- **Markdown 渲染** — AI 回复支持代码块、列表等格式
+- **Markdown 渲染** — AI 回复支持代码块、表格等格式
 - **深色主题** — 现代化深色 UI
-- **响应式布局** — 支持桌面端和移动端

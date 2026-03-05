@@ -5,7 +5,7 @@ from pathlib import Path
 
 DB_DIR = Path(__file__).resolve().parent.parent / "data"
 DB_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = DB_DIR / "cursorweb.db"
+DB_PATH = DB_DIR / "aircweb.db"
 
 def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH), timeout=10, check_same_thread=False)

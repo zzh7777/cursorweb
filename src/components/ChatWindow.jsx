@@ -16,10 +16,10 @@ export default function ChatWindow({ messages, streaming, onHintClick, conversat
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h2 className="text-xl font-semibold text-zinc-200 mb-2">Cursor Web Chat</h2>
+        <h2 className="text-xl font-semibold text-zinc-200 mb-2">AIRC · 医保智能监管</h2>
         <p className="text-zinc-500 max-w-md text-sm leading-relaxed">
-          通过 Cursor CLI 与 AI 对话。输入任何问题、编程任务或指令，
-          AI 将通过 Cursor Agent 为你提供帮助。
+          描述医保监管规则，AI 将生成对应的 SQL 查询。
+          你可以将生成的 SQL 保存为规则，统一管理和批量执行。
         </p>
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
           {[

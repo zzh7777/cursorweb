@@ -209,7 +209,7 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
           <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          <h1 className="text-base font-semibold">Cursor Web</h1>
+          <h1 className="text-base font-semibold">AIRC</h1>
         </div>
         <button
           onClick={onOpenSettings}
@@ -343,7 +343,7 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
 
       {/* Footer */}
       <div className="p-3 border-t border-border text-xs text-zinc-500 text-center">
-        Powered by Cursor CLI
+        AIRC · AI Rule Center
       </div>
     </div>
   );

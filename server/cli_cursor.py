@@ -1,4 +1,4 @@
-"""Cursor CLI adapter — wraps `agent` command in headless stream-json mode."""
+"""Cursor CLI adapter for AIRC — wraps `agent` command in headless stream-json mode."""
 
 import asyncio
 import json
