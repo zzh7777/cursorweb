@@ -21,6 +21,7 @@ export default function App() {
 
   const activeIdRef = useRef(activeId);
   const streamingConvIdRef = useRef(null);
+  const abortRef = useRef(null);
 
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
@@ -112,7 +113,14 @@ export default function App() {
     fetchConversations();
   };
 
-  const handleSend = async (text, imageFiles) => {
+  const handleStop = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }, []);
+
+  const handleSend = async (text, imageFiles, dbOptions = {}) => {
     if (streaming || uploading) return;
 
     const imagePaths = [];
@@ -158,6 +166,33 @@ export default function App() {
     let currentConvId = activeId;
     streamingConvIdRef.current = currentConvId;
 
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
+    let gotFirstData = false;
+    const INITIAL_TIMEOUT_MS = 60_000;
+    const timeoutId = setTimeout(() => {
+      if (!gotFirstData && !abortController.signal.aborted) {
+        abortController.abort();
+        if (activeIdRef.current === currentConvId) {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === 'assistant') {
+              updated[updated.length - 1] = {
+                ...last,
+                content: '请求超时：模型长时间无响应，请检查模型是否可用或切换其他模型后重试。',
+                error: true,
+              };
+            }
+            return updated;
+          });
+          setStreaming(false);
+          streamingConvIdRef.current = null;
+        }
+      }
+    }, INITIAL_TIMEOUT_MS);
+
     try {
       const res = await fetch(`${API}/chat`, {
         method: 'POST',
@@ -167,7 +202,10 @@ export default function App() {
           message: text,
           imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
           imageFilenames: imageFilenames.length > 0 ? imageFilenames : undefined,
+          dataSource: dbOptions.dataSource,
+          dbType: dbOptions.dbType,
         }),
+        signal: abortController.signal,
       });
 
       const reader = res.body.getReader();
@@ -177,6 +215,11 @@ export default function App() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        if (!gotFirstData) {
+          gotFirstData = true;
+          clearTimeout(timeoutId);
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -237,14 +280,28 @@ export default function App() {
         }
       }
     } catch (err) {
-      if (activeIdRef.current === currentConvId) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        if (activeIdRef.current === currentConvId) {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === 'assistant' && !last.error) {
+              if (!last.content) {
+                updated[updated.length - 1] = { ...last, content: '已停止生成。', error: false };
+              }
+            }
+            return updated;
+          });
+        }
+      } else if (activeIdRef.current === currentConvId) {
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last && last.role === 'assistant') {
             updated[updated.length - 1] = {
               ...last,
-              content: `Connection error: ${err.message}`,
+              content: `连接错误: ${err.message}`,
               error: true,
             };
           }
@@ -252,6 +309,8 @@ export default function App() {
         });
       }
     } finally {
+      clearTimeout(timeoutId);
+      abortRef.current = null;
       streamingConvIdRef.current = null;
       if (activeIdRef.current === currentConvId) {
         setStreaming(false);
@@ -314,7 +373,7 @@ export default function App() {
               conversationId={activeId}
               onRuleSaved={() => rulesPanelRef.current?.refresh?.()}
             />
-            <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} settings={settings} />
+            <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} settings={settings} onStop={handleStop} />
           </>
         ) : (
           <RulesPanel ref={rulesPanelRef} />

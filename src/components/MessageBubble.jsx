@@ -14,12 +14,29 @@ function ThinkingIndicator({ startTime }) {
     return () => clearInterval(timer);
   }, [startTime]);
 
+  const label = elapsed >= 30
+    ? `等待响应中 (${elapsed}s)，若长时间无响应请点击停止按钮`
+    : elapsed > 0
+      ? `思考中 (${elapsed}s)`
+      : '思考中...';
+
   return (
     <div className="flex items-center gap-3 py-1">
       <div className="thinking-spinner w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full" />
-      <span className="text-zinc-400 text-sm">
-        Thinking{elapsed > 0 ? ` (${elapsed}s)` : '...'}
-      </span>
+      <span className="text-zinc-400 text-sm">{label}</span>
+    </div>
+  );
+}
+
+function StreamingIndicator() {
+  return (
+    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/50">
+      <div className="streaming-dots flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+        <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+        <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+      </div>
+      <span className="text-zinc-500 text-xs">正在生成...</span>
     </div>
   );
 }
@@ -298,6 +315,7 @@ export default function MessageBubble({ message, isStreaming, conversationId, on
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                 {message.content}
               </ReactMarkdown>
+              {isStreaming && <StreamingIndicator />}
             </div>
           )}
         </div>
