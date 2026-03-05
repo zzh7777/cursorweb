@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import os
 from pathlib import Path
@@ -34,6 +35,10 @@ def _init_db():
         """)
         try:
             conn.execute("ALTER TABLE conversations ADD COLUMN cli_session_id TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE messages ADD COLUMN images TEXT")
         except Exception:
             pass
 
@@ -96,17 +101,18 @@ def delete_conversation(id: str):
         conn.execute("DELETE FROM conversations WHERE id = ?", (id,))
 
 
-def add_message(conversation_id: str, role: str, content: str) -> dict:
+def add_message(conversation_id: str, role: str, content: str, images: list[str] | None = None) -> dict:
+    images_json = json.dumps(images) if images else None
     with _get_conn() as conn:
         conn.execute(
             "UPDATE conversations SET updated_at = datetime('now') WHERE id = ?",
             (conversation_id,),
         )
         cur = conn.execute(
-            "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
-            (conversation_id, role, content),
+            "INSERT INTO messages (conversation_id, role, content, images) VALUES (?, ?, ?, ?)",
+            (conversation_id, role, content, images_json),
         )
-    return {"id": cur.lastrowid, "conversation_id": conversation_id, "role": role, "content": content}
+    return {"id": cur.lastrowid, "conversation_id": conversation_id, "role": role, "content": content, "images": images}
 
 
 def get_messages(conversation_id: str) -> list[dict]:
@@ -115,4 +121,10 @@ def get_messages(conversation_id: str) -> list[dict]:
             "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
             (conversation_id,),
         ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        raw = d.get("images")
+        d["images"] = json.loads(raw) if raw else None
+        result.append(d)
+    return result

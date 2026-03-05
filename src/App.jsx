@@ -10,6 +10,7 @@ export default function App() {
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [streaming, setStreaming] = useState(false);
+  const [uploading, setUploading] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const activeIdRef = useRef(activeId);
@@ -30,7 +31,13 @@ export default function App() {
   const loadMessages = useCallback(async (convId) => {
     const res = await fetch(`${API}/conversations/${convId}/messages`);
     const data = await res.json();
-    setMessages(data);
+    const mapped = data.map((msg) => {
+      if (msg.images && msg.images.length > 0) {
+        return { ...msg, images: msg.images.map((f) => `${API}/images/${f}`) };
+      }
+      return msg;
+    });
+    setMessages(mapped);
     setActiveId(convId);
 
     if (streamingConvIdRef.current === convId) {
@@ -52,10 +59,43 @@ export default function App() {
     fetchConversations();
   };
 
-  const handleSend = async (text) => {
-    if (streaming) return;
+  const handleSend = async (text, imageFiles) => {
+    if (streaming || uploading) return;
 
-    const userMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
+    const imagePaths = [];
+    const imageFilenames = [];
+    const imageUrls = [];
+
+    if (imageFiles && imageFiles.length > 0) {
+      const total = imageFiles.length;
+      for (let idx = 0; idx < total; idx++) {
+        setUploading(`上传图片中 (${idx + 1}/${total})...`);
+        const formData = new FormData();
+        formData.append('file', imageFiles[idx]);
+        try {
+          const uploadRes = await fetch(`${API}/upload-image`, { method: 'POST', body: formData });
+          const uploadData = await uploadRes.json();
+          if (uploadData.error) {
+            setUploading(null);
+            return;
+          }
+          imagePaths.push(uploadData.path);
+          imageFilenames.push(uploadData.filename);
+          imageUrls.push(`${API}/images/${uploadData.filename}`);
+        } catch {
+          setUploading(null);
+          return;
+        }
+      }
+      setUploading(null);
+    }
+
+    const userMsg = {
+      role: 'user',
+      content: text,
+      images: imageUrls.length > 0 ? imageUrls : undefined,
+      created_at: new Date().toISOString(),
+    };
     setMessages((prev) => [...prev, userMsg]);
     setStreaming(true);
 
@@ -72,6 +112,8 @@ export default function App() {
         body: JSON.stringify({
           conversationId: activeId,
           message: text,
+          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+          imageFilenames: imageFilenames.length > 0 ? imageFilenames : undefined,
         }),
       });
 
@@ -202,7 +244,7 @@ export default function App() {
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0">
         <ChatWindow messages={messages} streaming={streaming} />
-        <MessageInput onSend={handleSend} disabled={streaming} />
+        <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} />
       </div>
     </div>
   );

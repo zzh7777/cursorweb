@@ -1,9 +1,10 @@
 import asyncio
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,10 @@ from server.cli import run_agent, LOG_DIR
 
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
 ADMIN_HTML = Path(__file__).resolve().parent / "admin.html"
+IMAGE_DIR = Path(__file__).resolve().parent.parent / "data" / "images"
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
 app = FastAPI()
 
@@ -111,6 +116,33 @@ def debug_all_conversations():
         result.append({**c, "messages": msgs, "message_count": len(msgs)})
     return result
 
+# ---------- Image upload endpoint ----------
+
+@app.post("/api/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        return JSONResponse(
+            {"error": f"Unsupported image type: {file.content_type}"},
+            status_code=400,
+        )
+
+    ext = file.content_type.split("/")[-1].replace("jpeg", "jpg")
+    filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
+    save_path = IMAGE_DIR / filename
+
+    content = await file.read()
+    save_path.write_bytes(content)
+
+    return {"path": str(save_path), "filename": filename}
+
+
+@app.get("/api/images/{filename}")
+def serve_image(filename: str):
+    file_path = IMAGE_DIR / filename
+    if not file_path.is_file() or ".." in filename:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return FileResponse(str(file_path))
+
 # ---------- Chat SSE endpoint ----------
 
 @app.post("/api/chat")
@@ -118,6 +150,8 @@ async def chat(request: Request):
     body = await request.json()
     message = body.get("message")
     conv_id = body.get("conversationId")
+    image_filenames = body.get("imageFilenames") or []
+    image_paths = body.get("imagePaths") or []
 
     if not message:
         return JSONResponse({"error": "message is required"}, status_code=400)
@@ -130,14 +164,24 @@ async def chat(request: Request):
 
     cli_session_id = None if is_new else db.get_cli_session_id(conv_id)
 
-    db.add_message(conv_id, "user", message)
+    db.add_message(conv_id, "user", message, images=image_filenames or None)
+
+    prompt = message
+    if image_paths:
+        paths_text = "\n".join(f"  {i+1}. {p}" for i, p in enumerate(image_paths))
+        prompt = (
+            f"I have attached {len(image_paths)} image(s). Their file paths are:\n"
+            f"{paths_text}\n"
+            f"Please read each image using the Read tool first, then respond to my request.\n\n"
+            f"{message}"
+        )
 
     async def event_stream():
         yield _sse({"type": "conversation", "id": conv_id})
 
         accumulated = ""
         try:
-            async for event in run_agent(message, cli_session_id=cli_session_id):
+            async for event in run_agent(prompt, cli_session_id=cli_session_id):
                 if await request.is_disconnected():
                     break
 
