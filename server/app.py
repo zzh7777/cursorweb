@@ -4,13 +4,16 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
+
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from server import db
+from server import db, config
 from server.cli import run_agent, LOG_DIR
 
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
@@ -28,6 +31,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- Settings API ----------
+
+
+@app.get("/api/settings")
+def get_settings():
+    return config.get_settings()
+
+
+@app.patch("/api/settings")
+async def patch_settings(request: Request):
+    body = await request.json()
+    updated = config.update_settings(body)
+    return updated
+
 
 # ---------- Conversations API ----------
 

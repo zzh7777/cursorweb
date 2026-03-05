@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
+import SettingsPanel from './components/SettingsPanel';
 
 const API = '/api';
 
@@ -12,6 +13,8 @@ export default function App() {
   const [streaming, setStreaming] = useState(false);
   const [uploading, setUploading] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [settings, setSettings] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const activeIdRef = useRef(activeId);
   const streamingConvIdRef = useRef(null);
@@ -24,9 +27,27 @@ export default function App() {
     setConversations(data);
   }, []);
 
+  const fetchSettings = useCallback(async () => {
+    const res = await fetch(`${API}/settings`);
+    const data = await res.json();
+    setSettings(data);
+  }, []);
+
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+    fetchSettings();
+  }, [fetchConversations, fetchSettings]);
+
+  const handleSaveSettings = async (patch) => {
+    const res = await fetch(`${API}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json();
+    setSettings(data);
+    setShowSettings(false);
+  };
 
   const loadMessages = useCallback(async (convId) => {
     const res = await fetch(`${API}/conversations/${convId}/messages`);
@@ -161,13 +182,16 @@ export default function App() {
               }
             } else if (event.type === 'error') {
               if (activeIdRef.current === currentConvId) {
+                const errMsg = typeof event.message === 'string'
+                  ? event.message
+                  : JSON.stringify(event.message);
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last && last.role === 'assistant') {
                     updated[updated.length - 1] = {
                       ...last,
-                      content: last.content || `Error: ${event.message}`,
+                      content: last.content || `Error: ${errMsg}`,
                       error: true,
                     };
                   }
@@ -230,6 +254,8 @@ export default function App() {
           }}
           onNew={handleNewChat}
           onDelete={handleDeleteConversation}
+          settings={settings}
+          onOpenSettings={() => setShowSettings(true)}
         />
       </div>
 
@@ -243,9 +269,17 @@ export default function App() {
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0">
-        <ChatWindow messages={messages} streaming={streaming} />
-        <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} />
+        <ChatWindow messages={messages} streaming={streaming} settings={settings} />
+        <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} settings={settings} />
       </div>
+
+      {showSettings && settings && (
+        <SettingsPanel
+          settings={settings}
+          onSave={handleSaveSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }
