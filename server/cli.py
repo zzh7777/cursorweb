@@ -58,9 +58,6 @@ def resolve_agent_binary() -> tuple[str, str] | None:
 _resolved = resolve_agent_binary()
 
 
-MODEL = "claude-4.6-opus"
-
-
 def _readline_with_timeout(stdout):
     """Read one line from stdout (blocking). Returns b'' on EOF."""
     return stdout.readline()
@@ -71,6 +68,7 @@ async def run_agent(
     *,
     workspace: str | None = None,
     cli_session_id: str | None = None,
+    model: str = "claude-4.6-opus",
 ) -> AsyncGenerator[dict, None]:
     """
     Spawn Cursor Agent CLI in headless print mode.
@@ -79,7 +77,7 @@ async def run_agent(
     Yields parsed event dicts: {type: "text"/"tool"/"init"/"done"/"error"/"session", ...}
     """
     cli_args = ["-p", "--output-format", "stream-json", "--stream-partial-output", "--trust",
-                "--model", MODEL]
+                "--model", model]
 
     if cli_session_id:
         cli_args.extend(["--resume", cli_session_id])

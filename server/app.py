@@ -14,7 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server import db, config
-from server.cli import run_agent, LOG_DIR
+from server.cli import run_agent as run_cursor_agent
+from server.cli_opencode import run as run_opencode_agent
+from server.cli_common import LOG_DIR
 from server.mysql_runner import run_query, test_connection as mysql_test_connection, is_configured as mysql_is_configured
 
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
@@ -271,12 +273,24 @@ async def chat(request: Request):
             f"{message}"
         )
 
+    backend = config.get_backend()
+    model_id = config.get_model()
+
+    if backend == "opencode":
+        history = []
+        if not is_new:
+            msgs = db.get_messages(conv_id)
+            history = [{"role": m["role"], "content": m["content"]} for m in msgs[:-1]]
+        agent_gen = run_opencode_agent(prompt, model=model_id, history=history)
+    else:
+        agent_gen = run_cursor_agent(prompt, cli_session_id=cli_session_id, model=model_id)
+
     async def event_stream():
         yield _sse({"type": "conversation", "id": conv_id})
 
         accumulated = ""
         try:
-            async for event in run_agent(prompt, cli_session_id=cli_session_id):
+            async for event in agent_gen:
                 if await request.is_disconnected():
                     break
 

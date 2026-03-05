@@ -65,7 +65,7 @@ async def run(
     prompt: str,
     *,
     model: str = "zhipu/glm-5",
-    session_id: str | None = None,
+    history: list[dict] | None = None,
 ) -> AsyncGenerator[dict, None]:
     env = _load_env()
     base_url, api_key, model_name = _resolve_provider(model, env)
@@ -81,16 +81,17 @@ async def run(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+
+    messages = []
+    if history:
+        messages = [{"role": m["role"], "content": m["content"]} for m in history]
+    messages.append({"role": "user", "content": prompt})
+
     payload = {
         "model": model_name,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "stream": True,
     }
-
-    if session_id:
-        history = _get_session_history(session_id)
-        if history:
-            payload["messages"] = history + payload["messages"]
 
     accumulated = ""
     raw_lines: list[str] = []
@@ -147,14 +148,3 @@ async def run(
 
     yield {"type": "done", "content": accumulated}
     write_log(log_file, raw_lines, prompt)
-
-
-_session_store: dict[str, list[dict]] = {}
-
-
-def _get_session_history(session_id: str) -> list[dict]:
-    return _session_store.get(session_id, [])
-
-
-def save_session(session_id: str, messages: list[dict]):
-    _session_store[session_id] = messages
