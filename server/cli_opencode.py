@@ -10,6 +10,18 @@ import httpx
 
 from server.cli_common import LOG_DIR, AGENT_TIMEOUT, write_log
 
+# 医保规则分析时的 system 提示：确保大模型按 SKILL.md 第五节输出结构回复，且必须包含 SQL
+MEDICAL_RULE_SYSTEM_PROMPT = """你是医保基金监管规则分析助手。当用户提供医保监管规则（包括 JSON 格式的序号、违规行为、医保项目编码、问题描述、政策依据等，或图片、文字描述）时，你必须按以下结构完整回复，且必须包含「生成的 SQL」部分，不得只做规则解读而不生成 SQL。
+
+回复结构（缺一不可）：
+1. 开场：说明已按《医保线上监管 SQL 生成指南》分析，并指出规则类型（类型一重复/互斥、类型二数量超标、类型三折扣收费、类型四周期频次等）。
+2. 规则分析表格：规则编号、违规类型、A组/B组、折扣率或阈值、共现范围、违规判定等。
+3. **生成的 SQL**：在「生成的 SQL」小标题下，给出完整、可复制执行的 MySQL 代码，用 ```sql 代码块包裹，含规则编号与政策依据的注释。
+4. 自审检查：列出与本条 SQL 相关的检查项并标明已满足。
+5. 逻辑说明：B 组匹配方式、A 组触发条件、违规判定与违规金额计算方式。
+
+指南详见项目内 .cursor/skills/medical-insurance-sql/SKILL.md（表结构、字段、违规金额公式、踩坑清单等）。若信息不足可先做合理假设并说明后再生成 SQL。"""
+
 logger = logging.getLogger("cli.opencode")
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -82,9 +94,9 @@ async def run(
         "Content-Type": "application/json",
     }
 
-    messages = []
+    messages = [{"role": "system", "content": MEDICAL_RULE_SYSTEM_PROMPT}]
     if history:
-        messages = [{"role": m["role"], "content": m["content"]} for m in history]
+        messages.extend([{"role": m["role"], "content": m["content"]} for m in history])
     messages.append({"role": "user", "content": prompt})
 
     payload = {

@@ -11,7 +11,7 @@ alwaysApply: true
 
 1. 阅读 `.cursor/skills/medical-insurance-sql/SKILL.md` 获取 SQL 生成指南
 2. 分析规则的违规类型（重复收费 / 数量超标 / 折扣收费 / 周期频次）
-3. 按 SKILL.md 的输出要求生成规范的 SQL
+3. **必须**按 SKILL.md 第五节的「规则分析时的标准输出结构」完整回复：开场 → 规则分析表格 → **生成的 SQL** → 自审检查 → 逻辑说明。**不得只做规则解读、合规建议而不生成 SQL。**
 4. 将 SQL 放在 ` ```sql ` 代码块中输出
 5. 完成自审检查清单
 
