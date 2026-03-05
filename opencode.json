@@ -25,6 +25,9 @@
     "write": "allow",
     "read": "allow",
     "grep": "allow",
-    "glob": "allow"
+    "glob": "allow",
+    "skill": {
+      "*": "allow"
+    }
   }
 }
