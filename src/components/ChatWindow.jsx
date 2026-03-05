@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 
-export default function ChatWindow({ messages, streaming }) {
+export default function ChatWindow({ messages, streaming, onHintClick }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -28,11 +28,15 @@ export default function ChatWindow({ messages, streaming }) {
             '分析当前项目的代码结构',
             '如何优化数据库查询性能？',
           ].map((hint) => (
-            <div key={hint} className="px-4 py-3 rounded-xl bg-surface-hover/50 border border-border
-                                       text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-600
-                                       cursor-default transition-colors">
+            <button
+              key={hint}
+              onClick={() => onHintClick?.(hint)}
+              className="px-4 py-3 rounded-xl bg-surface-hover/50 border border-border
+                         text-sm text-zinc-400 hover:text-zinc-200 hover:border-primary/50
+                         hover:bg-primary/5 cursor-pointer transition-all text-left"
+            >
               {hint}
-            </div>
+            </button>
           ))}
         </div>
       </div>

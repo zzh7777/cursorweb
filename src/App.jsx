@@ -21,10 +21,25 @@ export default function App() {
 
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
-  const fetchConversations = useCallback(async () => {
+  const initialLoadDone = useRef(false);
+
+  const fetchConversations = useCallback(async (autoSelect = false) => {
     const res = await fetch(`${API}/conversations`);
     const data = await res.json();
     setConversations(data);
+    if (autoSelect && data.length > 0 && !activeIdRef.current) {
+      const latest = data[0];
+      const msgRes = await fetch(`${API}/conversations/${latest.id}/messages`);
+      const msgs = await msgRes.json();
+      const mapped = msgs.map((msg) =>
+        msg.images && msg.images.length > 0
+          ? { ...msg, images: msg.images.map((f) => `${API}/images/${f}`) }
+          : msg
+      );
+      setMessages(mapped);
+      setActiveId(latest.id);
+      activeIdRef.current = latest.id;
+    }
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -34,7 +49,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchConversations();
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      fetchConversations(true);
+    } else {
+      fetchConversations();
+    }
     fetchSettings();
   }, [fetchConversations, fetchSettings]);
 
@@ -77,6 +97,15 @@ export default function App() {
       setActiveId(null);
       setMessages([]);
     }
+    fetchConversations();
+  };
+
+  const handleRenameConversation = async (id, newTitle) => {
+    await fetch(`${API}/conversations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    });
     fetchConversations();
   };
 
@@ -254,6 +283,7 @@ export default function App() {
           }}
           onNew={handleNewChat}
           onDelete={handleDeleteConversation}
+          onRename={handleRenameConversation}
           settings={settings}
           onOpenSettings={() => setShowSettings(true)}
         />
@@ -269,7 +299,7 @@ export default function App() {
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0">
-        <ChatWindow messages={messages} streaming={streaming} settings={settings} />
+        <ChatWindow messages={messages} streaming={streaming} settings={settings} onHintClick={(hint) => handleSend(hint, [])} />
         <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} settings={settings} />
       </div>
 
