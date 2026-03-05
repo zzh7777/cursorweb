@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
 import SettingsPanel from './components/SettingsPanel';
+import RulesPanel from './components/RulesPanel';
 
 const API = '/api';
 
@@ -15,6 +16,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settings, setSettings] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState('chat');
+  const rulesPanelRef = useRef(null);
 
   const activeIdRef = useRef(activeId);
   const streamingConvIdRef = useRef(null);
@@ -286,6 +289,8 @@ export default function App() {
           onRename={handleRenameConversation}
           settings={settings}
           onOpenSettings={() => setShowSettings(true)}
+          view={view}
+          onViewChange={setView}
         />
       </div>
 
@@ -299,8 +304,21 @@ export default function App() {
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0">
-        <ChatWindow messages={messages} streaming={streaming} settings={settings} onHintClick={(hint) => handleSend(hint, [])} />
-        <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} settings={settings} />
+        {view === 'chat' ? (
+          <>
+            <ChatWindow
+              messages={messages}
+              streaming={streaming}
+              settings={settings}
+              onHintClick={(hint) => handleSend(hint, [])}
+              conversationId={activeId}
+              onRuleSaved={() => rulesPanelRef.current?.refresh?.()}
+            />
+            <MessageInput onSend={handleSend} disabled={streaming} uploading={uploading} settings={settings} />
+          </>
+        ) : (
+          <RulesPanel ref={rulesPanelRef} />
+        )}
       </div>
 
       {showSettings && settings && (

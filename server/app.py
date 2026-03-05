@@ -15,6 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server import db, config
 from server.cli import run_agent, LOG_DIR
+from server.mysql_runner import run_query, test_connection as mysql_test_connection, is_configured as mysql_is_configured
 
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
 ADMIN_HTML = Path(__file__).resolve().parent / "admin.html"
@@ -160,6 +161,82 @@ def serve_image(filename: str):
     if not file_path.is_file() or ".." in filename:
         return JSONResponse({"error": "Not found"}, status_code=404)
     return FileResponse(str(file_path))
+
+# ---------- Rules API ----------
+
+@app.get("/api/rules")
+def list_rules(enabled: int | None = None):
+    return db.get_rules(enabled_only=(enabled == 1))
+
+
+@app.post("/api/rules", status_code=201)
+async def create_rule(request: Request):
+    body = await request.json()
+    name = body.get("name", "").strip()
+    sql_code = body.get("sql_code", "").strip()
+    if not name or not sql_code:
+        return JSONResponse({"error": "name and sql_code are required"}, status_code=400)
+    rule_id = str(uuid.uuid4())
+    rule = db.create_rule(
+        id=rule_id,
+        name=name,
+        sql_code=sql_code,
+        description=body.get("description", ""),
+        category=body.get("category", ""),
+        conversation_id=body.get("conversation_id"),
+    )
+    return rule
+
+
+@app.get("/api/rules/mysql-status")
+def mysql_status():
+    if not mysql_is_configured():
+        return {"configured": False, "connected": False, "message": "MySQL 未配置"}
+    result = mysql_test_connection()
+    return {"configured": True, "connected": result["ok"], "message": result["message"]}
+
+
+@app.post("/api/rules/run-all")
+def run_all_rules():
+    rules = db.get_rules(enabled_only=True)
+    results = []
+    for rule in rules:
+        result = run_query(rule["sql_code"])
+        results.append({"rule_id": rule["id"], "rule_name": rule["name"], **result})
+    return results
+
+
+@app.get("/api/rules/{rule_id}")
+def get_rule(rule_id: str):
+    rule = db.get_rule(rule_id)
+    if not rule:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return rule
+
+
+@app.patch("/api/rules/{rule_id}")
+async def patch_rule(rule_id: str, request: Request):
+    body = await request.json()
+    rule = db.update_rule(rule_id, **body)
+    if not rule:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return rule
+
+
+@app.delete("/api/rules/{rule_id}")
+def delete_rule(rule_id: str):
+    db.delete_rule(rule_id)
+    return {"ok": True}
+
+
+@app.post("/api/rules/{rule_id}/run")
+def run_single_rule(rule_id: str):
+    rule = db.get_rule(rule_id)
+    if not rule:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    result = run_query(rule["sql_code"])
+    return {"rule_id": rule_id, "rule_name": rule["name"], **result}
+
 
 # ---------- Chat SSE endpoint ----------
 

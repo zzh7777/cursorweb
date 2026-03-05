@@ -32,6 +32,17 @@ def _init_db():
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS rules (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                sql_code TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT '',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                conversation_id TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
         try:
             conn.execute("ALTER TABLE conversations ADD COLUMN cli_session_id TEXT")
@@ -128,3 +139,53 @@ def get_messages(conversation_id: str) -> list[dict]:
         d["images"] = json.loads(raw) if raw else None
         result.append(d)
     return result
+
+
+# ---------- Rules ----------
+
+def create_rule(id: str, name: str, sql_code: str, description: str = "",
+                category: str = "", conversation_id: str | None = None) -> dict:
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO rules (id, name, description, sql_code, category, conversation_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (id, name, description, sql_code, category, conversation_id),
+        )
+        row = conn.execute("SELECT * FROM rules WHERE id = ?", (id,)).fetchone()
+    return _row_to_dict(row)
+
+
+def get_rules(enabled_only: bool = False) -> list[dict]:
+    with _get_conn() as conn:
+        if enabled_only:
+            rows = conn.execute("SELECT * FROM rules WHERE enabled = 1 ORDER BY updated_at DESC").fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM rules ORDER BY updated_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_rule(id: str) -> dict | None:
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM rules WHERE id = ?", (id,)).fetchone()
+    return _row_to_dict(row)
+
+
+def update_rule(id: str, **fields) -> dict | None:
+    allowed = {"name", "description", "sql_code", "category", "enabled"}
+    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    if not updates:
+        return get_rule(id)
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values())
+    values.append(id)
+    with _get_conn() as conn:
+        conn.execute(
+            f"UPDATE rules SET {set_clause}, updated_at = datetime('now') WHERE id = ?",
+            values,
+        )
+        row = conn.execute("SELECT * FROM rules WHERE id = ?", (id,)).fetchone()
+    return _row_to_dict(row)
+
+
+def delete_rule(id: str):
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM rules WHERE id = ?", (id,))

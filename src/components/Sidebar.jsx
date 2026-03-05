@@ -170,7 +170,7 @@ function ConversationItem({ conv, isActive, onSelect, onDelete, onRename }) {
   );
 }
 
-export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onRename, onOpenSettings }) {
+export default function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onRename, onOpenSettings, view, onViewChange }) {
   const [search, setSearch] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -224,80 +224,122 @@ export default function Sidebar({ conversations, activeId, onSelect, onNew, onDe
         </button>
       </div>
 
-      {/* New Chat button */}
-      <div className="p-3">
+      {/* View tabs */}
+      <div className="flex border-b border-border">
         <button
-          onClick={onNew}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg
-                     bg-primary hover:bg-primary-hover text-white font-medium
-                     transition-colors cursor-pointer"
+          onClick={() => onViewChange?.('chat')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors cursor-pointer
+            ${view === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-zinc-500 hover:text-zinc-300'}`}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
-          新对话
+          对话
+        </button>
+        <button
+          onClick={() => onViewChange?.('rules')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors cursor-pointer
+            ${view === 'rules' ? 'text-primary border-b-2 border-primary' : 'text-zinc-500 hover:text-zinc-300'}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          规则
         </button>
       </div>
 
-      {/* Search */}
-      {conversations.length > 0 && (
-        <div className="px-3 pb-2">
-          <div className="relative">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      {/* New Chat button (only in chat view) */}
+      {view === 'chat' && (
+        <div className="p-3">
+          <button
+            onClick={onNew}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg
+                       bg-primary hover:bg-primary-hover text-white font-medium
+                       transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索对话..."
-              className="w-full bg-zinc-800/50 border border-border rounded-lg pl-8 pr-3 py-1.5 text-sm text-zinc-200
-                         placeholder-zinc-600 outline-none focus:border-primary/50 transition-colors"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
+            新对话
+          </button>
         </div>
       )}
 
-      {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
-        {conversations.length === 0 ? (
-          <div className="text-center text-zinc-500 text-sm mt-8 px-4">
-            暂无对话，开始新的聊天吧
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center text-zinc-500 text-sm mt-8 px-4">
-            未找到匹配的对话
-          </div>
-        ) : (
-          groups.map((group) => (
-            <div key={group.label} className="mb-1">
-              <div className="px-3 py-1.5 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
-                {group.label}
-              </div>
-              {group.items.map((conv) => (
-                <ConversationItem
-                  key={conv.id}
-                  conv={conv}
-                  isActive={activeId === conv.id}
-                  onSelect={onSelect}
-                  onDelete={handleDeleteRequest}
-                  onRename={onRename}
+      {view === 'chat' ? (
+        <>
+          {/* Search */}
+          {conversations.length > 0 && (
+            <div className="px-3 pb-2">
+              <div className="relative">
+                <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="搜索对话..."
+                  className="w-full bg-zinc-800/50 border border-border rounded-lg pl-8 pr-3 py-1.5 text-sm text-zinc-200
+                             placeholder-zinc-600 outline-none focus:border-primary/50 transition-colors"
                 />
-              ))}
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
-          ))
-        )}
-      </div>
+          )}
+
+          {/* Conversation list */}
+          <div className="flex-1 overflow-y-auto px-2 pb-2">
+            {conversations.length === 0 ? (
+              <div className="text-center text-zinc-500 text-sm mt-8 px-4">
+                暂无对话，开始新的聊天吧
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center text-zinc-500 text-sm mt-8 px-4">
+                未找到匹配的对话
+              </div>
+            ) : (
+              groups.map((group) => (
+                <div key={group.label} className="mb-1">
+                  <div className="px-3 py-1.5 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
+                    {group.label}
+                  </div>
+                  {group.items.map((conv) => (
+                    <ConversationItem
+                      key={conv.id}
+                      conv={conv}
+                      isActive={activeId === conv.id}
+                      onSelect={onSelect}
+                      onDelete={handleDeleteRequest}
+                      onRename={onRename}
+                    />
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center text-zinc-500 text-sm">
+            <svg className="w-10 h-10 text-zinc-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            规则管理面板已在右侧打开
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="p-3 border-t border-border text-xs text-zinc-500 text-center">

@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+const API = '/api';
 
 function ThinkingIndicator({ startTime }) {
   const [elapsed, setElapsed] = useState(0);
@@ -52,7 +54,170 @@ function ImageLightbox({ src, onClose }) {
   );
 }
 
-export default function MessageBubble({ message, isStreaming }) {
+function extractRuleNameFromSQL(sql) {
+  const lines = sql.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('--')) {
+      const comment = trimmed.replace(/^--\s*/, '').trim();
+      const cleaned = comment.replace(/^(规则[\d.:：]*\s*)/i, '').trim();
+      if (cleaned.length >= 2 && cleaned.length <= 100) return cleaned;
+    }
+  }
+  return '';
+}
+
+function SaveRuleDialog({ sql, conversationId, onClose, onSaved }) {
+  const defaultName = extractRuleNameFromSQL(sql);
+  const [name, setName] = useState(defaultName);
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/rules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim(),
+          sql_code: sql,
+          category: category.trim(),
+          conversation_id: conversationId || null,
+        }),
+      });
+      if (res.ok) {
+        onSaved?.();
+        onClose();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-zinc-900 border border-border rounded-xl w-full max-w-md mx-4 shadow-2xl animate-[fadeIn_0.15s_ease-out]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold">保存为规则</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover text-zinc-400 hover:text-zinc-200 cursor-pointer">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">规则名称 *</label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+              placeholder="如：重复收费-血常规与血红蛋白"
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-zinc-200
+                         placeholder-zinc-600 outline-none focus:border-primary/50 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">描述</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="规则说明（可选）"
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-zinc-200
+                         placeholder-zinc-600 outline-none focus:border-primary/50 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">分类</label>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="如：重复收费、频次限额（可选）"
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-zinc-200
+                         placeholder-zinc-600 outline-none focus:border-primary/50 transition-colors"
+            />
+          </div>
+          <div className="bg-zinc-800/50 rounded-lg p-3 max-h-32 overflow-auto">
+            <pre className="text-[11px] text-zinc-400 whitespace-pre-wrap font-mono">{sql.slice(0, 500)}{sql.length > 500 ? '...' : ''}</pre>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-surface-hover transition-colors cursor-pointer">
+            取消
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim() || saving}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-primary hover:bg-primary-hover text-white
+                       disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SqlCodeBlock({ children, conversationId, onRuleSaved }) {
+  const [showSave, setShowSave] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const code = String(children).replace(/\n$/, '');
+
+  const handleSaved = useCallback(() => {
+    setSaved(true);
+    onRuleSaved?.();
+    setTimeout(() => setSaved(false), 3000);
+  }, [onRuleSaved]);
+
+  return (
+    <div className="relative group/sql">
+      <pre className="!mt-1 !mb-1">
+        <code>{code}</code>
+      </pre>
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/sql:opacity-100 transition-opacity">
+        <button
+          onClick={() => setShowSave(true)}
+          disabled={saved}
+          className={`px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer
+            ${saved
+              ? 'bg-green-600/20 text-green-400 border border-green-600/30'
+              : 'bg-primary/80 hover:bg-primary text-white'
+            }`}
+        >
+          {saved ? '已保存' : '保存为规则'}
+        </button>
+      </div>
+      {showSave && (
+        <SaveRuleDialog
+          sql={code}
+          conversationId={conversationId}
+          onClose={() => setShowSave(false)}
+          onSaved={handleSaved}
+        />
+      )}
+    </div>
+  );
+}
+
+export default function MessageBubble({ message, isStreaming, conversationId, onRuleSaved }) {
   const isUser = message.role === 'user';
   const isEmpty = !message.content && isStreaming;
   const startTimeRef = useRef(Date.now());
@@ -61,6 +226,31 @@ export default function MessageBubble({ message, isStreaming }) {
   useEffect(() => {
     if (isEmpty) startTimeRef.current = Date.now();
   }, [isEmpty]);
+
+  const markdownComponents = {
+    code({ className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || '');
+      const lang = match ? match[1] : '';
+      const isBlock = className !== undefined;
+
+      if (isBlock && lang === 'sql') {
+        return (
+          <SqlCodeBlock conversationId={conversationId} onRuleSaved={onRuleSaved}>
+            {children}
+          </SqlCodeBlock>
+        );
+      }
+
+      if (isBlock) {
+        return <pre><code className={className} {...props}>{children}</code></pre>;
+      }
+
+      return <code className={className} {...props}>{children}</code>;
+    },
+    pre({ children }) {
+      return <>{children}</>;
+    },
+  };
 
   return (
     <>
@@ -105,7 +295,9 @@ export default function MessageBubble({ message, isStreaming }) {
             </div>
           ) : (
             <div className="message-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {message.content}
+              </ReactMarkdown>
             </div>
           )}
         </div>

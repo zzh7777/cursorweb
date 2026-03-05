@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 
-export default function ChatWindow({ messages, streaming, onHintClick }) {
+export default function ChatWindow({ messages, streaming, onHintClick, conversationId, onRuleSaved }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function ChatWindow({ messages, streaming, onHintClick }) {
       <div className="max-w-3xl mx-auto space-y-4">
         {messages.map((msg, i) => {
           const isLastAssistant = i === messages.length - 1 && msg.role === 'assistant' && streaming;
-          return <MessageBubble key={i} message={msg} isStreaming={isLastAssistant} />;
+          return <MessageBubble key={i} message={msg} isStreaming={isLastAssistant} conversationId={conversationId} onRuleSaved={onRuleSaved} />;
         })}
         <div ref={bottomRef} />
       </div>
